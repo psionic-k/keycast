@@ -349,16 +349,18 @@ t to show the actual COMMAND, or a symbol to be shown instead."
 
 ;;; Common
 
+(defvar keycast-freestyle-mode)
 (defvar keycast-mode-line-mode)
 (defvar keycast-header-line-mode)
 (defvar keycast-tab-bar-mode)
 (defvar keycast-log-mode)
 
 (defun keycast--mode-active-p (&optional line)
-  (or keycast-mode-line-mode
+  (or keycast-freestyle-mode
+      keycast-mode-line-mode
       keycast-header-line-mode
       keycast-tab-bar-mode
-      (and (not line) keycast-log-mode)))
+   (and (not line) keycast-log-mode)))
 
 (defvar keycast--this-command-desc nil)
 (defvar keycast--this-command-keys nil)
@@ -409,6 +411,8 @@ t to show the actual COMMAND, or a symbol to be shown instead."
             (< keycast--command-repetitions 0))
         (cl-incf keycast--command-repetitions)
       (setq keycast--command-repetitions 0)))
+  (when keycast-freestyle-mode
+    (keycast--freestyle-update))
   (when keycast-mode-line-mode
     (keycast--maybe-edit-local-format
      'mode-line-format
@@ -513,6 +517,36 @@ t to show the actual COMMAND, or a symbol to be shown instead."
              (dolist (sub tree)
                (when-let ((found (keycast--tree-member elt sub)))
                  (throw 'found found)))))))
+
+(defun keycast--add-hooks ()
+  (add-hook 'pre-command-hook #'keycast--pre-command-record t)
+  (add-hook 'post-command-hook #'keycast--update t)
+  (add-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit t))
+
+(defun keycast--remove-hooks ()
+  (remove-hook 'pre-command-hook #'keycast--pre-command-record t)
+  (remove-hook 'post-command-hook #'keycast--update)
+  (remove-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit))
+
+;;; Freestyle
+
+(defvar keycast-last-formatted nil)
+
+(defun keycast--freestyle-update ()
+  (setq keycast-last-formatted
+        (keycast--format keycast-mode-line-format)))
+
+;;;###autoload
+(define-minor-mode keycast-freestyle-mode
+  "Monitors commands, but you are on your own for display.
+Show `keycast-last-formatted' to complete this mode."
+  :global t
+  (cond (keycast-freestyle-mode
+         (add-hook 'post-command-hook #'keycast--update t)
+         (add-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit t))
+        (t (remove-hook 'post-command-hook #'keycast--update)
+           (remove-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit)
+           (setq keycast-last-formatted nil))))
 
 ;;; Mode-Line
 
